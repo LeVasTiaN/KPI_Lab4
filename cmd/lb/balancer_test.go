@@ -24,3 +24,26 @@ func TestHashClientIP(t *testing.T) {
 	assert.NotEqual(t, hash1, hash4, "Hash should be different for different IP")
 	assert.NotEqual(t, hash3, hash4, "Hash should be different for different IP")
 }
+
+func TestGetClientIP(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	clientIP := getClientIP(req)
+	assert.Equal(t, "192.168.1.100", clientIP, "Should extract IP from X-Forwarded-For")
+
+	req.Header.Set("X-Forwarded-For", "192.168.1.100, 10.0.0.1, 172.16.0.1")
+	clientIP = getClientIP(req)
+	assert.Equal(t, "192.168.1.100", clientIP, "Should take first IP from X-Forwarded-For")
+
+	req.Header.Del("X-Forwarded-For")
+	req.Header.Set("X-Real-IP", "192.168.1.200")
+	clientIP = getClientIP(req)
+	assert.Equal(t, "192.168.1.200", clientIP, "Should extract IP from X-Real-IP")
+
+	req.Header.Del("X-Real-IP")
+	req.RemoteAddr = "192.168.1.50:12345"
+	clientIP = getClientIP(req)
+	assert.Equal(t, "192.168.1.50", clientIP, "Should extract IP from RemoteAddr")
+}
