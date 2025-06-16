@@ -23,3 +23,20 @@ jobs:
 
       - name: Run unit tests
         run: go test -v ./cmd/lb/
+
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and run integration tests
+        run: |
+          docker-compose -f docker-compose.yaml -f docker-compose.test.yaml up --build --exit-code-from test
+
+      - name: Clean up containers
+        if: always()
+        run: docker-compose -f docker-compose.yaml -f docker-compose.test.yaml down
