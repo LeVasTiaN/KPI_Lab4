@@ -47,3 +47,26 @@ func TestGetClientIP(t *testing.T) {
 	clientIP = getClientIP(req)
 	assert.Equal(t, "192.168.1.50", clientIP, "Should extract IP from RemoteAddr")
 }
+
+func TestSelectServer(t *testing.T) {
+	healthyServers = []string{"server1:8080", "server2:8080", "server3:8080"}
+
+	ip := "192.168.1.1"
+	server1, err := selectServer(ip)
+	require.NoError(t, err)
+
+	server2, err := selectServer(ip)
+	require.NoError(t, err)
+	assert.Equal(t, server1, server2, "Same IP should always select same server")
+
+	differentServers := make(map[string]bool)
+	testIPs := []string{"192.168.1.1", "192.168.1.2", "10.0.0.1", "172.16.0.1", "203.0.113.1"}
+
+	for _, ip := range testIPs {
+		server, err := selectServer(ip)
+		require.NoError(t, err)
+		differentServers[server] = true
+	}
+
+	assert.True(t, len(differentServers) >= 1, "Should distribute across servers")
+}
