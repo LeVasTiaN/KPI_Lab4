@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +54,41 @@ func health(dst string) bool {
 		return false
 	}
 	return true
+}
+
+func hashClientIP(clientIP string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(clientIP))
+	return h.Sum32()
+}
+
+func getClientIP(r *http.Request) string {
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		ips := strings.Split(forwardedFor, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return realIP
+	}
+
+	clientIP := r.RemoteAddr
+	if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+		clientIP = clientIP[:idx]
+	}
+	return clientIP
+}
+
+func selectServer(clientIP string) (string, error) {
+	serversMutex.RLock()
+	defer serversMutex.RUnlock()
+
+	if len(healthyServers) == 0 {
+		return "", fmt.Errorf("no healthy servers available")
+	}
+
+	serverIndex := int(hashClientIP(clientIP)) % len(healthyServers)
+	return healthyServers[serverIndex], nil
 }
 
 func updateHealthyServers() {
@@ -111,14 +148,25 @@ func main() {
 		server := server
 		go func() {
 			for range time.Tick(10 * time.Second) {
-				log.Println(server, "healthy:", health(server))
+				isHealthy := health(server)
+				log.Println(server, "healthy:", isHealthy)
+				updateHealthyServers()
 			}
 		}()
 	}
 
 	frontend := httptools.CreateServer(*port, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// TODO: Реалізуйте свій алгоритм балансувальника.
-		forward(serversPool[0], rw, r)
+		clientIP := getClientIP(r)
+
+		selectedServer, err := selectServer(clientIP)
+		if err != nil {
+			log.Printf("Error selecting server: %s", err)
+			rw.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+
+		log.Printf("Client %s -> Server %s", clientIP, selectedServer)
+		forward(selectedServer, rw, r)
 	}))
 
 	log.Println("Starting load balancer...")
