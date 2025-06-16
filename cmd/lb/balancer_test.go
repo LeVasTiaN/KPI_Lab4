@@ -81,3 +81,37 @@ func TestSelectServerNoHealthyServers(t *testing.T) {
 
 	healthyServers = originalHealthy
 }
+
+func TestServerDistribution(t *testing.T) {
+	healthyServers = []string{"server1:8080", "server2:8080", "server3:8080"}
+
+	serverCounts := make(map[string]int)
+
+	for i := 0; i < 100; i++ {
+		ip := fmt.Sprintf("192.168.1.%d", i+1)
+		server, err := selectServer(ip)
+		require.NoError(t, err)
+		serverCounts[server]++
+	}
+
+	assert.True(t, len(serverCounts) >= 2, "Should distribute across multiple servers")
+
+	for server, count := range serverCounts {
+		assert.Less(t, count, 100, "Server %s shouldn't handle all requests", server)
+	}
+}
+
+func TestHashDistribution(t *testing.T) {
+	hashCounts := make(map[uint32]int)
+
+	for i := 0; i < 1000; i++ {
+		ip := fmt.Sprintf("192.168.%d.%d", i/256, i%256)
+		hash := hashClientIP(ip)
+		hashCounts[hash%3]++
+	}
+
+	for bucket, count := range hashCounts {
+		assert.Greater(t, count, 200, "Hash bucket %d should have reasonable count", bucket)
+		assert.Less(t, count, 500, "Hash bucket %d shouldn't be too concentrated", bucket)
+	}
+}
