@@ -24,6 +24,7 @@ var (
 	traceEnabled = flag.Bool("trace", false, "whether to include tracing information into responses")
 )
 
+//test
 var (
 	timeout     = time.Duration(*timeoutSec) * time.Second
 	serversPool = []string{
