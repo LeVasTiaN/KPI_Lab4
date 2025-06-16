@@ -70,3 +70,14 @@ func TestSelectServer(t *testing.T) {
 
 	assert.True(t, len(differentServers) >= 1, "Should distribute across servers")
 }
+
+func TestSelectServerNoHealthyServers(t *testing.T) {
+	originalHealthy := healthyServers
+	healthyServers = []string{}
+
+	_, err := selectServer("192.168.1.1")
+	assert.Error(t, err, "Should return error when no healthy servers")
+	assert.Contains(t, err.Error(), "no healthy servers available")
+
+	healthyServers = originalHealthy
+}
