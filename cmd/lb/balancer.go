@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/roman-mazur/architecture-practice-4-template/httptools"
@@ -28,6 +29,8 @@ var (
 		"server2:8080",
 		"server3:8080",
 	}
+	healthyServers []string
+	serversMutex   sync.RWMutex
 )
 
 func scheme() string {
@@ -49,6 +52,21 @@ func health(dst string) bool {
 		return false
 	}
 	return true
+}
+
+func updateHealthyServers() {
+	var healthy []string
+	for _, server := range serversPool {
+		if health(server) {
+			healthy = append(healthy, server)
+		}
+	}
+
+	serversMutex.Lock()
+	healthyServers = healthy
+	serversMutex.Unlock()
+
+	log.Printf("Healthy servers: %v", healthy)
 }
 
 func forward(dst string, rw http.ResponseWriter, r *http.Request) error {
@@ -87,7 +105,8 @@ func forward(dst string, rw http.ResponseWriter, r *http.Request) error {
 func main() {
 	flag.Parse()
 
-	// TODO: Використовуйте дані про стан сервера, щоб підтримувати список тих серверів, яким можна відправляти запит.
+	updateHealthyServers()
+
 	for _, server := range serversPool {
 		server := server
 		go func() {
