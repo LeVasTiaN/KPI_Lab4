@@ -76,6 +76,52 @@ func TestClientIPConsistency(t *testing.T) {
 	}
 }
 
+func TestMultipleClientsDistribution(t *testing.T) {
+	if _, exists := os.LookupEnv("INTEGRATION_TEST"); !exists {
+		t.Skip("Integration test is not enabled")
+	}
+
+	clientIPs := []string{
+		"192.168.1.1",
+		"192.168.1.2",
+		"192.168.1.3",
+		"10.0.0.1",
+		"10.0.0.2",
+		"172.16.0.1",
+		"172.16.0.2",
+		"203.0.113.1",
+	}
+
+	serverUsage := make(map[string]int)
+
+	for _, clientIP := range clientIPs {
+		req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/v1/some-data", baseAddress), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req.Header.Set("X-Forwarded-For", clientIP)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+
+		lbFrom := resp.Header.Get("lb-from")
+		serverUsage[lbFrom]++
+		resp.Body.Close()
+
+		t.Logf("Client %s -> Server %s", clientIP, lbFrom)
+	}
+
+	if len(serverUsage) < 2 {
+		t.Errorf("Expected distribution across multiple servers, only used: %v", serverUsage)
+	}
+
+	t.Logf("Server usage distribution: %v", serverUsage)
+}
+
 func BenchmarkBalancer(b *testing.B) {
 	// TODO: Реалізуйте інтеграційний бенчмарк для балансувальникка.
 }
