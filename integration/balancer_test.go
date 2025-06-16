@@ -122,6 +122,63 @@ func TestMultipleClientsDistribution(t *testing.T) {
 	t.Logf("Server usage distribution: %v", serverUsage)
 }
 
+func TestLoadBalancerHealth(t *testing.T) {
+	if _, exists := os.LookupEnv("INTEGRATION_TEST"); !exists {
+		t.Skip("Integration test is not enabled")
+	}
+
+	for i := 0; i < 10; i++ {
+		resp, err := client.Get(fmt.Sprintf("%s/api/v1/some-data", baseAddress))
+		if err != nil {
+			t.Errorf("Request %d failed: %v", i+1, err)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Request %d returned status %d", i+1, resp.StatusCode)
+		}
+
+		lbFrom := resp.Header.Get("lb-from")
+		if lbFrom == "" {
+			t.Errorf("Request %d missing lb-from header", i+1)
+		}
+
+		resp.Body.Close()
+	}
+}
+
 func BenchmarkBalancer(b *testing.B) {
-	// TODO: Реалізуйте інтеграційний бенчмарк для балансувальникка.
+	if _, exists := os.LookupEnv("INTEGRATION_TEST"); !exists {
+		b.Skip("Integration test is not enabled")
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		resp, err := client.Get(fmt.Sprintf("%s/api/v1/some-data", baseAddress))
+		if err != nil {
+			b.Error(err)
+			continue
+		}
+		resp.Body.Close()
+	}
+}
+
+func BenchmarkBalancerParallel(b *testing.B) {
+	if _, exists := os.LookupEnv("INTEGRATION_TEST"); !exists {
+		b.Skip("Integration test is not enabled")
+	}
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			resp, err := client.Get(fmt.Sprintf("%s/api/v1/some-data", baseAddress))
+			if err != nil {
+				b.Error(err)
+				continue
+			}
+			resp.Body.Close()
+		}
+	})
 }
